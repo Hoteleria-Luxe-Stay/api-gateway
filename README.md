@@ -8,7 +8,7 @@ API Gateway basado en **Spring Cloud Gateway**. Actúa como punto de entrada ún
 |-----------|-------|
 | Puerto | 8080 |
 | Java | 21 |
-| Spring Boot | 3.4.2 |
+| Spring Boot | 3.4.0 |
 | Spring Cloud | 2024.0.1 |
 | Tipo | Reactive (WebFlux) |
 
@@ -95,36 +95,22 @@ GET http://localhost:8080/actuator/gateway/routes
 ### Dockerfile
 
 ```dockerfile
-FROM eclipse-temurin:21-jdk-alpine AS builder
-
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
-
 COPY pom.xml .
-COPY .mvn .mvn
-COPY mvnw .
-
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
-
+RUN mvn dependency:go-offline -B
 COPY src ./src
-
-RUN ./mvnw clean package -DskipTests
+RUN mvn clean package -DskipTests -B
 
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
-
 RUN addgroup -S spring && adduser -S spring -G spring
+COPY --from=builder /app/target/*.jar app.jar
 USER spring:spring
-
-COPY --from=builder /app/target/api-gateway-*.jar app.jar
-
 EXPOSE 8080
-
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
-
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 ```
 
@@ -146,6 +132,8 @@ services:
       - CONFIG_SERVER_URL=http://config-server:8888
       - EUREKA_URL=http://discovery-service:8761/eureka
       - CORS_ALLOWED_ORIGINS=http://localhost:4200
+      - JAVA_OPTS=-Xms256m -Xmx512m
+      - JAVA_OPTS=-Xms256m -Xmx512m
       # URLs de microservicios (para modo sin Eureka)
       - AUTH_SERVICE_URL=http://auth-service:8081
       - HOTEL_SERVICE_URL=http://hotel-service:8082
@@ -251,10 +239,8 @@ services:
     container_name: config-server
     ports:
       - "8888:8888"
-    volumes:
-      - ../config-repo:/config-repo:ro
     environment:
-      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:/config-repo
+      - CONFIG_REPO_URI=https://github.com/tu-usuario/config-repo.git
     networks:
       - hotel-network
     healthcheck:
@@ -402,7 +388,7 @@ volumes:
 
 ```bash
 # Compilar
-./mvnw clean package -DskipTests
+mvn clean package -DskipTests
 
 # Construir imagen
 docker build -t api-gateway:latest .
@@ -660,7 +646,7 @@ export AKS_CLUSTER="aks-hotel-reservas"
 az acr login --name $ACR_NAME
 
 # Build local y push
-./mvnw clean package -DskipTests
+mvn clean package -DskipTests
 docker build -t $ACR_NAME.azurecr.io/api-gateway:v1.0.0 .
 docker push $ACR_NAME.azurecr.io/api-gateway:v1.0.0
 
@@ -1001,7 +987,7 @@ spring:
 
 ```bash
 # Compilar
-./mvnw clean package -DskipTests
+mvn clean package -DskipTests
 
 # Ejecutar
 java -jar target/api-gateway-1.0.0-SNAPSHOT.jar
@@ -1012,7 +998,7 @@ java -jar target/api-gateway-1.0.0-SNAPSHOT.jar \
   --eureka.client.service-url.defaultZone=http://localhost:8761/eureka
 
 # O con Maven
-./mvnw spring-boot:run
+mvn spring-boot:run
 
 # Verificar
 curl http://localhost:8080/actuator/health
