@@ -3,6 +3,7 @@ package com.hotel.gateway.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
@@ -44,9 +45,13 @@ public class SecurityConfig {
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
-                .cors(ServerHttpSecurity.CorsSpec::disable)
+                // CORS: delegar al CORS de Spring Cloud Gateway (api-gateway.yml)
+                // NO deshabilitarlo, para que los preflight OPTIONS funcionen
+                .cors(cors -> { })
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
+                        // Preflight CORS (Angular envia OPTIONS antes de cada request)
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Rutas publicas (no requieren JWT)
                         .pathMatchers(
                                 "/api/v1/auth/login",
@@ -60,7 +65,7 @@ public class SecurityConfig {
                                 "/api/v1/actuator/**"
                         ).permitAll()
                         // Rutas publicas GET (consultar hoteles, habitaciones, departamentos, tipos)
-                        .pathMatchers(org.springframework.http.HttpMethod.GET,
+                        .pathMatchers(HttpMethod.GET,
                                 "/api/v1/hoteles/**",
                                 "/api/v1/departamentos/**",
                                 "/api/v1/habitaciones/**",
