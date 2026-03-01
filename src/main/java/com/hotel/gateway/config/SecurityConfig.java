@@ -66,9 +66,13 @@ public class SecurityConfig {
                         ).permitAll()
                         // Rutas publicas GET (consultar hoteles, habitaciones, departamentos, tipos)
                         .pathMatchers(HttpMethod.GET,
+                                "/api/v1/hoteles",
                                 "/api/v1/hoteles/**",
+                                "/api/v1/departamentos",
                                 "/api/v1/departamentos/**",
+                                "/api/v1/habitaciones",
                                 "/api/v1/habitaciones/**",
+                                "/api/v1/tipos-habitacion",
                                 "/api/v1/tipos-habitacion/**"
                         ).permitAll()
                         // Todo lo demas requiere JWT valido
