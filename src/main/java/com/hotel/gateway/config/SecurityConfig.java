@@ -61,6 +61,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/password/**",
                                 "/api/v1/contacto/**",
                                 "/api/v1/oauth/token",
+                                // Webhook publico de Stripe — autenticidad validada por HMAC en ms-pago.
+                                // SIN JWT: Stripe no manda Bearer, manda Stripe-Signature.
+                                "/api/v1/pagos/webhook/**",
                                 "/actuator/**",
                                 "/api/v1/actuator/**"
                         ).permitAll()

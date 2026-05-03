@@ -62,6 +62,68 @@ api-gateway/
 | `/api/v1/plantillas/**` | notificacion-service |
 | `/api/v1/contacto/**` | notificacion-service |
 
+### Pago Service (8085)
+
+| Ruta | Destino |
+|------|---------|
+| `/api/v1/pagos/**` | pago-service |
+
+## Rate Limiting (Ronda 7)
+
+El gateway aplica **token bucket rate limiting** sobre Redis (Spring Cloud Gateway nativo). Cada request gasta 1 token del bucket del cliente; si no quedan tokens → `429 Too Many Requests` con header `Retry-After`.
+
+### Identificacion del cliente (KeyResolver)
+
+| Bean | Estrategia | Uso |
+|------|------------|-----|
+| `userKeyResolver` (`@Primary`) | Extrae `userId` del JWT; cae a IP si no hay JWT | Default para todos los endpoints |
+| `ipKeyResolver` | IP remota (respeta `X-Forwarded-For`) | Override en endpoints publicos |
+
+### Rates configurados
+
+| Endpoint | Estrategia | replenishRate (req/s) | burstCapacity |
+|----------|-----------|------------------------|---------------|
+| `/api/v1/auth/password/**` | IP | 1 | 3 |
+| `/api/v1/auth/login`, `/register`, `/refresh`, `/validate` | IP | 1 | 5 |
+| `/api/v1/oauth/token` | IP | 5 | 15 |
+| `/api/v1/contacto/**` | IP | 1 | 3 |
+| Resto de routes (default) | userId (cae a IP) | 10 | 30 |
+
+### Por que estos numeros
+
+- **Login/register/password**: agresivo por IP → frena brute force sin afectar UX (un usuario humano nunca logea 5 veces en 5 segundos).
+- **Default 10/30**: generoso para navegacion normal; un usuario con dashboard abierto + polling no se afecta. Frena scraping y bots.
+- **Burst > replenish**: permite "rafagas" naturales (cargar la home dispara 5-10 GETs juntos) sin penalizar.
+
+### Defensa en profundidad
+
+Rate Limiting (gateway) + Idempotency-Key (gateway) + Resilience4j (services) + Circuit Breaker = capas independientes. Si una falla, las demas absorben el impacto.
+
+## Idempotency-Key (Ronda 5.3)
+
+El gateway implementa un **GlobalFilter reactivo** (`IdempotencyGlobalFilter`) que valida el header `Idempotency-Key` en endpoints sensibles, almacenando la respuesta en Redis (TTL 24h).
+
+### Endpoints protegidos (config `idempotency.protected-paths`)
+
+- `POST /api/v1/reservas`
+- `POST /api/v1/reservas/*/iniciar-pago`
+
+### Contrato
+
+| Caso | Respuesta |
+|------|-----------|
+| Header faltante o no UUID v4 | `400 Bad Request` |
+| Primera vez (SETNX = true) | Se ejecuta el request real, response cacheada en Redis |
+| Mismo key, response ya cacheada | Replay con header `X-Idempotent-Replay: true` |
+| Mismo key, request en vuelo | `409 Conflict` (placeholder en Redis) |
+| Status 5xx | NO se cachea (transitorio, reintentar) |
+
+Clave Redis: `idem:{userId}:{uuid}` — segregada por usuario para evitar colisiones cross-user.
+
+### Por que en el gateway
+
+Defensa en profundidad — protege a todos los servicios sin que cada microservicio re-implemente la logica. Critico para `iniciar-pago`: evita doble cobro a Stripe si el cliente reintenta por timeout de red.
+
 ## Variables de Entorno
 
 | Variable | Descripción | Default |
@@ -74,6 +136,9 @@ api-gateway/
 | `HOTEL_SERVICE_URL` | URL Hotel Service | `http://hotel-service:8082` |
 | `RESERVA_SERVICE_URL` | URL Reserva Service | `http://reserva-service:8083` |
 | `NOTIFICACION_SERVICE_URL` | URL Notificacion Service | `http://notificacion-service:8084` |
+| `REDIS_HOST` | Host Redis (Idempotency-Key store) | `redis` |
+| `REDIS_PORT` | Puerto Redis | `6379` |
+| `IDEMPOTENCY_TTL_HOURS` | TTL del cache de respuestas | `24` |
 
 ## Endpoints Actuator
 
