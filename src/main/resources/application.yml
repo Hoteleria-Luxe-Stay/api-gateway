@@ -6,6 +6,8 @@ spring:
   cloud:
     config:
       fail-fast: ${CONFIG_FAIL_FAST:false}
+      username: ${CONFIG_SERVER_USER:config-admin}
+      password: ${CONFIG_SERVER_PASSWORD:dev-only-pass-change-me}
       retry:
         initial-interval: 2000
         max-attempts: 6

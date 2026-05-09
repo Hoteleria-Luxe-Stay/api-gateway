@@ -6,6 +6,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
@@ -14,6 +20,7 @@ import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.List;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -21,6 +28,12 @@ public class SecurityConfig {
 
     @Value("${application.security.jwt.public-key}")
     private String publicKeyPem;
+
+    @Value("${application.security.jwt.issuer}")
+    private String jwtIssuer;
+
+    @Value("${application.security.jwt.audience}")
+    private String jwtAudience;
 
     @Bean
     public RSAPublicKey rsaPublicKey() throws Exception {
@@ -39,7 +52,17 @@ public class SecurityConfig {
 
     @Bean
     public ReactiveJwtDecoder reactiveJwtDecoder(RSAPublicKey publicKey) {
-        return NimbusReactiveJwtDecoder.withPublicKey(publicKey).build();
+        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withPublicKey(publicKey).build();
+
+        OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(jwtIssuer);
+        OAuth2TokenValidator<Jwt> withAudience = new JwtClaimValidator<List<String>>(
+                JwtClaimNames.AUD,
+                aud -> aud != null && aud.contains(jwtAudience)
+        );
+        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience);
+        decoder.setJwtValidator(validator);
+
+        return decoder;
     }
 
     @Bean
@@ -61,8 +84,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/password/**",
                                 "/api/v1/contacto/**",
                                 "/api/v1/oauth/token",
-                                // Webhook publico de Stripe — autenticidad validada por HMAC en ms-pago.
-                                // SIN JWT: Stripe no manda Bearer, manda Stripe-Signature.
+                                // Webhook publico del proveedor de pago — autenticidad validada por HMAC en ms-pago.
+                                // SIN JWT: el proveedor no manda Bearer, manda firma propia (x-signature en MP).
                                 "/api/v1/pagos/webhook/**",
                                 "/actuator/**",
                                 "/api/v1/actuator/**"

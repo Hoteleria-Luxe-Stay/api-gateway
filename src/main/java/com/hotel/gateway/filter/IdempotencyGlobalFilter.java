@@ -52,7 +52,7 @@ import java.util.regex.Pattern;
  *
  * Por que aca y no en cada microservicio: protege a TODO el sistema sin que cada
  * servicio re-implemente la logica. Defensa en profundidad — si el cliente reintenta
- * /iniciar-pago por timeout de red, no cobramos dos veces a Stripe.
+ * /iniciar-pago por timeout de red, no cobramos dos veces al proveedor de pago.
  *
  * Order: HIGHEST_PRECEDENCE + 50 → corre DESPUES del JWT (porque necesitamos userId)
  * pero ANTES de los filtros de routing.
