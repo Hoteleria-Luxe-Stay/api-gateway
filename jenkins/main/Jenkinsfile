@@ -95,6 +95,9 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${BACKEND_USER}@${BACKEND_HOST} bash <<'REMOTE'
 set -e
 cd ${BACKEND_COMPOSE}
+# Auto-heal: garantiza idempotentemente que el compose use :latest para este service.
+# Si ya esta en :latest, sed no hace nada. Si esta en :1.0-arm64 (legacy), lo cambia.
+sed -i "s|darfelio/${SERVICE_NAME}:1.0-arm64|darfelio/${SERVICE_NAME}:latest|g" docker-compose.yml
 docker compose pull ${SERVICE_NAME}
 docker compose up -d ${SERVICE_NAME}
 echo "Deploy ${SERVICE_NAME} OK"
