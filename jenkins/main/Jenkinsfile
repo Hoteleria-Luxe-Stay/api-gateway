@@ -1,0 +1,119 @@
+// =============================================================================
+// Pipeline declarativo - api-gateway (branch main)
+// Sistema de Reserva Hotelera Luxe Stay (Spring Cloud Gateway + Resilience4j CB)
+// =============================================================================
+
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk-21'
+        maven 'maven-3.9'
+    }
+
+    environment {
+        // ==================== APP ====================
+        SERVICE_NAME = 'api-gateway'
+        IMAGE_NAME   = 'api-gateway'
+        IMAGE_TAG    = "${env.BUILD_NUMBER}"
+
+        // ==================== DOCKER HUB ====================
+        DOCKERHUB_NAMESPACE = 'darfelio'
+        DOCKERHUB_CREDS     = 'dockerhub-darfelio'
+
+        // ==================== SONARQUBE ====================
+        SONAR_SERVER       = 'LuxeSonar'
+        SONAR_PROJECT_KEY  = 'api-gateway'
+        SONAR_PROJECT_NAME = 'Luxe Stay - API Gateway'
+
+        // ==================== BACKEND DEPLOY ====================
+        BACKEND_HOST    = '129.151.111.51'
+        BACKEND_USER    = 'ubuntu'
+        BACKEND_COMPOSE = '/home/ubuntu/luxe-stay/oracle-prod/backend'
+        SSH_CRED_ID     = 'ssh-key-backend'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+
+        stage('🧪 Tests & Coverage (JaCoCo)') {
+            steps {
+                sh 'mvn -B clean verify'
+            }
+            post {
+                always {
+                    junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+                    jacoco execPattern: '**/target/jacoco.exec',
+                           classPattern: '**/target/classes',
+                           sourcePattern: '**/src/main/java',
+                           exclusionPattern: '**/config/**,**/*Application.*'
+                }
+            }
+        }
+
+        stage('🔍 SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONAR_SERVER}") {
+                    sh """
+                        mvn -B sonar:sonar \
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                            -Dsonar.projectName='${SONAR_PROJECT_NAME}'
+                    """
+                }
+            }
+        }
+
+        stage('🚦 Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('🔨 Build Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKERHUB_CREDS}") {
+                        def img = docker.build("${DOCKERHUB_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}")
+                        img.push()
+                        img.push('latest')
+                    }
+                }
+            }
+        }
+
+        stage('🚀 Deploy Application') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED_ID}"]) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${BACKEND_USER}@${BACKEND_HOST} bash <<'REMOTE'
+set -e
+cd ${BACKEND_COMPOSE}
+docker compose pull ${SERVICE_NAME}
+docker compose up -d ${SERVICE_NAME}
+echo "Deploy ${SERVICE_NAME} OK"
+REMOTE
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "✅ Pipeline ${env.SERVICE_NAME} build #${env.BUILD_NUMBER} OK"
+        }
+        failure {
+            echo "❌ Pipeline ${env.SERVICE_NAME} build #${env.BUILD_NUMBER} FAILED — revisar logs del stage que rompio"
+        }
+    }
+}
