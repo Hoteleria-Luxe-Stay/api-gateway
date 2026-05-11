@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Base64;
 
 /**
- * Snapshot serializable de la response a cachear en Redis.
+ * Snapshot serializablee de la response a cachear en Redis.
  * El body se guarda en Base64 para soportar payloads binarios sin perder bytes.
  */
 public record CachedResponse(
