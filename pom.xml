@@ -96,6 +96,25 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- ==================================================================
+             OBSERVABILITY (Round 10) — metrics + traces + logs via OTel.
+             api-gateway WebFlux: usa misma combinacion que MVC services.
+             micrometer-tracing-bridge-otel auto-instrumenta WebFlux/Reactor.
+        ================================================================== -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
