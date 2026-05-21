@@ -87,6 +87,10 @@ public class SecurityConfig {
                                 // Webhook publico del proveedor de pago — autenticidad validada por HMAC en ms-pago.
                                 // SIN JWT: el proveedor no manda Bearer, manda firma propia (x-signature en MP).
                                 "/api/v1/pagos/webhook/**",
+                                // Relay HTTPS -> localhost para back_urls de MP en dev. Sin JWT porque MP no
+                                // manda Bearer al hacer el redirect. Path: /pagos/redirect/{id}/{tipo}.
+                                // Validacion del destino + whitelisting de {tipo} en ms-pago.
+                                "/api/v1/pagos/redirect/**",
                                 "/actuator/**",
                                 "/api/v1/actuator/**"
                         ).permitAll()
